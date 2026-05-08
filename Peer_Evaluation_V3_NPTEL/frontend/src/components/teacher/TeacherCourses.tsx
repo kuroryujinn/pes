@@ -30,6 +30,18 @@ const palette = {
 
 const TeacherCourses = () => {
   const [courses, setCourses] = useState<Course[] | null>(null);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const filteredCourses = (courses || []).filter(c => {
+    if (!debouncedSearch) return true;
+    return c.name.toLowerCase().includes(debouncedSearch) || c.code.toLowerCase().includes(debouncedSearch);
+  });
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollCourse, setEnrollCourse] = useState("");
   const [enrollBatch, setEnrollBatch] = useState("");
@@ -176,6 +188,9 @@ const TeacherCourses = () => {
         Courses and Batches
       </h2>
       <div className="w-full max-w-5xl">
+        <div className="mb-4">
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search courses or codes..." className="w-full px-3 py-2 rounded border" />
+        </div>
         {courses === null ? (
           <p className="text-center text-lg font-medium" style={{ color: palette['text-muted'] }}>Loading courses...</p>
         ) : courses.length === 0 ? (
@@ -196,7 +211,7 @@ const TeacherCourses = () => {
               </tr>
             </thead>
             <tbody>
-              {courses.flatMap((course) =>
+              {filteredCourses.flatMap((course) =>
                 course.batches.map((batch) => (
                   <tr key={course._id + batch._id}
                     style={{

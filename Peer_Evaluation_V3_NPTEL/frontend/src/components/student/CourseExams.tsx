@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 
 const PORT = import.meta.env.VITE_BACKEND_PORT || 5000;
 
@@ -57,6 +57,27 @@ const CourseExams = ({ courseId, onBack, darkMode }: Props) => {
     queryKey: ['courseExams', courseId],
     queryFn: () => fetchExams(courseId),
   });
+
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all'|'upcoming'|'ongoing'|'ended'>('all');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const filteredExams = useMemo(() => {
+    if (!exams) return [];
+    return exams.filter(exam => {
+      const matchesSearch = !debouncedSearch || (exam.title && exam.title.toLowerCase().includes(debouncedSearch)) || (exam.batch?.name && exam.batch.name.toLowerCase().includes(debouncedSearch));
+      const now = new Date();
+      const isStarted = new Date(exam.startTime) <= now;
+      const isEnded = new Date(exam.endTime) < now;
+      const matchesStatus = statusFilter === 'all' || (statusFilter === 'upcoming' && !isStarted) || (statusFilter === 'ongoing' && isStarted && !isEnded) || (statusFilter === 'ended' && isEnded);
+      return matchesSearch && matchesStatus;
+    });
+  }, [exams, debouncedSearch, statusFilter]);
 
   const [activeExamId, setActiveExamId] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -145,15 +166,31 @@ const CourseExams = ({ courseId, onBack, darkMode }: Props) => {
   if (error) return <div className="text-center p-4 text-red-600">Failed to load exams.</div>;
 
   return (
-    <div className="grid grid-cols-fill-minmax-300 gap-8 relative z-10 sm:grid-cols-1 sm:gap-5">
-      <button
+    <div>
+      <div className="flex items-center gap-3 mb-4">
+        <button
         className={`px-6 py-3 rounded-xl font-semibold shadow mb-4 w-fit ${darkMode ? "bg-gray-700 text-white" : "bg-gradient-to-r from-gray-700 to-gray-800 text-white"}`}
         onClick={onBack}
       >
         ← Back to Courses
       </button>
 
-      {exams && exams.map((exam) => {
+        <input
+          placeholder="Search exams or batch..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className={`ml-4 px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-800 text-white border-gray-600' : 'bg-white'}`}
+        />
+
+        <select className="ml-auto px-3 py-2 rounded-lg border" value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}>
+          <option value="all">All</option>
+          <option value="upcoming">Upcoming</option>
+          <option value="ongoing">Ongoing</option>
+          <option value="ended">Ended</option>
+        </select>
+      </div>
+
+      {filteredExams && filteredExams.map((exam) => {
         const isStarted = new Date(exam.startTime) <= now;
         const isEnded = new Date(exam.endTime) < now;
         const canSubmit = isStarted && !isEnded;
