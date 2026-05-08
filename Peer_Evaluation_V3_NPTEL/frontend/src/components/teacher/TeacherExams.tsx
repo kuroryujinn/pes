@@ -59,7 +59,7 @@ export default function TeacherExams() {
   // Remove questions state, use numQuestions and questionPaperFile
   const [numQuestions, setNumQuestions] = useState<number>(1);
   const [maxMarks, setMaxMarks] = useState<number[]>([0]);
-  const [questionPaperFile, setQuestionPaperFile] = useState<File | null>(null);
+  // questionPaperFile state removed (unused)
 
   // Loading states
   const [allLoading, setAllLoading] = useState(true);
@@ -135,7 +135,7 @@ export default function TeacherExams() {
     setK(1);
     setNumQuestions(1);
     setMaxMarks([0]);
-    setQuestionPaperFile(null);
+    // questionPaperFile state removed
   };
 
   // Toast for ALL actions
@@ -205,8 +205,8 @@ export default function TeacherExams() {
     setEndTime(toInputDatetime(exam.endTime));
     setK(exam.k);
     setNumQuestions(exam.numQuestions || 1);
-    setMaxMarks(exam.maxMarks || Array(exam.numQuestions).fill(0));
-    setQuestionPaperFile(null);
+    setMaxMarks(((exam as any).maxMarks) || Array(exam.numQuestions).fill(0));
+    // question paper file state cleared (not used)
     setEditOpen(true);
   };
 
@@ -552,6 +552,71 @@ export default function TeacherExams() {
         >
           <FiPlus className="inline-block mr-2" /> Schedule Exam
         </button>
+        <button
+          className="px-4 py-2 rounded-xl shadow-md text-white font-bold text-base bg-green-600 hover:bg-green-700"
+          onClick={async () => {
+            try {
+              const examsToExport = (selectedCourse && selectedBatch) ? exams : allExams;
+              const rows: string[] = [];
+              const header = ['Exam Title', 'Course', 'Batch', 'Student Name', 'Student Email', 'Submitted At'];
+              rows.push(header.join(','));
+
+              for (const exam of examsToExport) {
+                // fetch submissions for each exam
+                try {
+                  const resp = await axios.get(`http://localhost:${PORT}/api/teacher/exams/${exam._id}/submissions`, { headers: { Authorization: `Bearer ${token}` } });
+                  const subs = resp.data.submissions || [];
+                  if (subs.length === 0) {
+                    // push empty row to indicate no submissions
+                    const row = [
+                      `"${(exam.title || '').replace(/"/g, '""')}"`,
+                      `"${''}"`,
+                      `"${''}"`,
+                      `"${''}"`,
+                      `"${''}"`,
+                      `"${''}"`,
+                    ];
+                    rows.push(row.join(','));
+                  } else {
+                    for (const s of subs) {
+                      const studentName = s.student?.name || '';
+                      const studentEmail = s.student?.email || '';
+                      const submittedAt = s.submittedAt ? new Date(s.submittedAt).toISOString() : '';
+                      const row = [
+                        `"${(exam.title || '').replace(/"/g, '""')}"`,
+                        `"${''}"`,
+                        `"${''}"`,
+                        `"${studentName.replace(/"/g, '""')}"`,
+                        `"${studentEmail.replace(/"/g, '""')}"`,
+                        `"${submittedAt}"`,
+                      ];
+                      rows.push(row.join(','));
+                    }
+                  }
+                } catch (err) {
+                  console.error('Failed to fetch submissions for exam', exam._id, err);
+                }
+              }
+
+              const csv = rows.join('\n');
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.setAttribute('download', `teacher_results_export.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              toastAction('Export completed', 'success');
+            } catch (err) {
+              console.error('Export failed', err);
+              toastAction('Export failed', 'error');
+            }
+          }}
+        >
+          Export CSV
+        </button>
       </div>
 
       {/* Render block for loading, empty, or table */}
@@ -836,7 +901,7 @@ export default function TeacherExams() {
                     type="file"
                     accept="application/pdf"
                     className="w-full border-2 border-purple-400 px-4 py-2 rounded-xl"
-                    onChange={e => setQuestionPaperFile(e.target.files?.[0] || null)}
+                    onChange={() => { /* not used in this UI */ }}
                   />
               </div>
             </div>
